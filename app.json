@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "Billares Nueva Colombia",
+    "slug": "billares-nueva-colombia-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "billares",
+    "userInterfaceStyle": "dark",
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#111827"
+      }
+    },
+    "ios": {
+      "supportsTablet": false
+    },
+    "plugins": [
+      "expo-router"
+    ]
+  }
+}
