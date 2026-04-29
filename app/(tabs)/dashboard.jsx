@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   View, Text, StyleSheet, ScrollView,
-  RefreshControl, SafeAreaView, ActivityIndicator
+  RefreshControl, ActivityIndicator
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../../src/lib/supabase'
 import { colors } from '../../src/constants/colors'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { usePolling } from '../../src/hooks/usePolling'
 
 function formatCOP(valor) {
   return '$' + Number(valor || 0).toLocaleString('es-CO')
@@ -38,34 +39,29 @@ export default function Dashboard() {
       const inicioISO = inicio.toISOString()
       const finISO = fin.toISOString()
 
-      // Ventas del día
       const { data: ventas } = await supabase
         .from('ventas')
         .select('precio_venta, cantidad')
         .gte('registrado_en', inicioISO)
         .lte('registrado_en', finISO)
 
-      // Turnos del día
       const { data: turnos } = await supabase
         .from('turnos_billar')
         .select('costo_turno')
         .gte('registrado_en', inicioISO)
         .lte('registrado_en', finISO)
 
-      // Gastos del día
       const { data: gastos } = await supabase
         .from('gastos')
         .select('monto')
         .gte('fecha', inicioISO)
         .lte('fecha', finISO)
 
-      // Mesas ocupadas
       const { data: mesas } = await supabase
         .from('mesas')
         .select('estado')
         .eq('activo', true)
 
-      // Alertas no leídas
       const { data: alertas } = await supabase
         .from('notificaciones')
         .select('id')
@@ -98,18 +94,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     cargarDatos()
-
-    // Realtime — escuchar cambios en ventas, turnos y mesas
-    const canal = supabase
-      .channel('dashboard')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ventas' }, cargarDatos)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'turnos_billar' }, cargarDatos)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'mesas' }, cargarDatos)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'gastos' }, cargarDatos)
-      .subscribe()
-
-    return () => supabase.removeChannel(canal)
   }, [])
+
+  usePolling(cargarDatos, 10000)
 
   const onRefresh = useCallback(() => {
     setRefreshing(true)
@@ -129,9 +116,7 @@ export default function Dashboard() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-    <View style={[styles.container, { paddingTop: insets.top }]}></View>
-    
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <ScrollView
         contentContainerStyle={styles.scroll}
         refreshControl={
@@ -175,7 +160,7 @@ export default function Dashboard() {
           </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   )
 }
 
