@@ -143,7 +143,7 @@ function ModalAgregarGasto({ visible, onCerrar, onGuardado }) {
 function SelectorMesAnio({ mes, anio, onCambiarMes, onCambiarAnio }) {
   const hoy = new Date()
   const anios = []
-  for (let a = hoy.getFullYear(); a >= hoy.getFullYear() - 3; a--) anios.push(a)
+  for (let a = hoy.getFullYear(); a >= 2026; a--) anios.push(a)
 
   return (
     <View style={styles.selectorContainer}>

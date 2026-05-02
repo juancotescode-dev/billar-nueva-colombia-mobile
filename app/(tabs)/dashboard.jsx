@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../../src/lib/supabase'
 import { colors } from '../../src/constants/colors'
 import { usePolling } from '../../src/hooks/usePolling'
+import { guardarCache, leerCacheSinExpiry } from '../../src/hooks/useCache'
 
 function formatCOP(valor) {
   return '$' + Number(valor || 0).toLocaleString('es-CO')
@@ -35,57 +36,61 @@ export default function Dashboard() {
       inicio.setHours(0, 0, 0, 0)
       const fin = new Date(hoy)
       fin.setHours(23, 59, 59, 999)
-
+  
       const inicioISO = inicio.toISOString()
       const finISO = fin.toISOString()
-
+  
       const { data: ventas } = await supabase
         .from('ventas')
         .select('precio_venta, cantidad')
         .gte('registrado_en', inicioISO)
         .lte('registrado_en', finISO)
-
+  
       const { data: turnos } = await supabase
         .from('turnos_billar')
         .select('costo_turno')
         .gte('registrado_en', inicioISO)
         .lte('registrado_en', finISO)
-
+  
       const { data: gastos } = await supabase
         .from('gastos')
         .select('monto')
         .gte('fecha', inicioISO)
         .lte('fecha', finISO)
-
+  
       const { data: mesas } = await supabase
         .from('mesas')
         .select('estado')
         .eq('activo', true)
-
+  
       const { data: alertas } = await supabase
         .from('notificaciones')
         .select('id')
         .eq('leida', false)
-
+  
       const totalVentas = (ventas || []).reduce((s, v) => s + v.precio_venta * v.cantidad, 0)
       const totalTurnos = (turnos || []).reduce((s, t) => s + Number(t.costo_turno), 0)
       const totalGastos = (gastos || []).reduce((s, g) => s + Number(g.monto), 0)
       const totalIngresos = totalVentas + totalTurnos
       const gananciaNeta = totalIngresos - totalGastos
-
       const mesasOcupadas = (mesas || []).filter(m => m.estado === 'ocupada').length
       const totalMesas = (mesas || []).length
-
-      setDatos({
+  
+      const nuevoDatos = {
         totalIngresos,
         totalGastos,
         gananciaNeta,
         mesasOcupadas,
         totalMesas,
         alertas: (alertas || []).length,
-      })
+      }
+  
+      await guardarCache('dashboard', nuevoDatos)
+      setDatos(nuevoDatos)
     } catch (err) {
       console.error('Error cargando dashboard:', err.message)
+      const cache = await leerCacheSinExpiry('dashboard')
+      if (cache) setDatos(cache)
     } finally {
       setCargando(false)
       setRefreshing(false)
