@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, ActivityIndicator, Platform
+  TouchableOpacity, ActivityIndicator, Platform, RefreshControl
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import DateTimePicker from '@react-native-community/datetimepicker'
 import { supabase } from '../../src/lib/supabase'
 import { colors } from '../../src/constants/colors'
 import { usePolling } from '../../src/hooks/usePolling'
@@ -16,43 +17,45 @@ function formatHora(fechaISO) {
   return new Date(fechaISO).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
 }
 
-function formatFecha(fechaISO) {
-  return new Date(fechaISO).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })
+function formatFechaCorta(fecha) {
+  return fecha.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-const RANGOS = [
-  { label: 'Hoy', dias: 0 },
-  { label: 'Ayer', dias: 1 },
-  { label: '7 días', dias: 7 },
-  { label: '15 días', dias: 15 },
-  { label: '30 días', dias: 30 },
-]
+function formatFechaRegistro(fechaISO, mostrarFecha) {
+  const hora = new Date(fechaISO).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
+  if (!mostrarFecha) return hora
+  const fecha = new Date(fechaISO).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })
+  return `${fecha} ${hora}`
+}
 
 export default function Historial() {
   const insets = useSafeAreaInsets()
   const [registros, setRegistros] = useState([])
   const [cargando, setCargando] = useState(true)
-  const [rangoSeleccionado, setRangoSeleccionado] = useState(0)
 
-  function obtenerFechas(dias) {
-    const fin = new Date()
-    fin.setHours(23, 59, 59, 999)
-    const inicio = new Date()
-    if (dias === 1) {
-      inicio.setDate(inicio.getDate() - 1)
-      inicio.setHours(0, 0, 0, 0)
-      fin.setDate(fin.getDate() - 1)
-      fin.setHours(23, 59, 59, 999)
-    } else {
-      inicio.setDate(inicio.getDate() - dias)
-      inicio.setHours(0, 0, 0, 0)
-    }
-    return { inicio, fin }
+  const hoy = new Date()
+  const [fechaInicio, setFechaInicio] = useState(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate(), 0, 0, 0))
+  const [fechaFin, setFechaFin] = useState(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate(), 23, 59, 59))
+
+  const [mostrandoPicker, setMostrandoPicker] = useState(null) // 'inicio' | 'fin' | null
+
+  const mostrarFechaEnRegistro = fechaInicio.toDateString() !== fechaFin.toDateString()
+
+  const [refreshing, setRefreshing] = useState(false)
+
+
+  async function onRefresh() {
+    setRefreshing(true)
+    await cargarHistorial()
+    setRefreshing(false)
   }
 
   async function cargarHistorial() {
     try {
-      const { inicio, fin } = obtenerFechas(RANGOS[rangoSeleccionado].dias)
+      const inicio = new Date(fechaInicio)
+      inicio.setHours(0, 0, 0, 0)
+      const fin = new Date(fechaFin)
+      fin.setHours(23, 59, 59, 999)
 
       const { data: ventas } = await supabase
         .from('ventas')
@@ -110,9 +113,35 @@ export default function Historial() {
   useEffect(() => {
     setCargando(true)
     cargarHistorial()
-  }, [rangoSeleccionado])
+  }, [fechaInicio, fechaFin])
 
   usePolling(cargarHistorial, 15000)
+
+  function onChangePicker(event, selectedDate) {
+    if (event.type === 'dismissed') {
+      setMostrandoPicker(null)
+      return
+    }
+    if (!selectedDate) return
+
+    if (mostrandoPicker === 'inicio') {
+      const nueva = new Date(selectedDate)
+      nueva.setHours(0, 0, 0, 0)
+      const nuevaFin = new Date(nueva)
+      nuevaFin.setDate(nuevaFin.getDate() + 1)
+      nuevaFin.setHours(23, 59, 59, 999)
+      setFechaInicio(nueva)
+      setFechaFin(nuevaFin)
+    } else if (mostrandoPicker === 'fin') {
+      const nueva = new Date(selectedDate)
+      nueva.setHours(23, 59, 59, 999)
+      if (nueva < fechaInicio) {
+        setFechaInicio(new Date(nueva.getFullYear(), nueva.getMonth(), nueva.getDate() - 1, 0, 0, 0))
+      }
+      setFechaFin(nueva)
+    }
+    setMostrandoPicker(null)
+  }
 
   const totalPeriodo = registros.reduce((s, r) => s + Number(r.monto), 0)
   const totalVentas = registros.filter(r => r.tipo === 'venta').reduce((s, r) => s + Number(r.monto), 0)
@@ -120,32 +149,49 @@ export default function Historial() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Selector de rango */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.rangosScroll}
-        contentContainerStyle={styles.rangosContent}
-      >
-        {RANGOS.map((r, i) => (
-          <TouchableOpacity
-            key={i}
-            style={[styles.rangoBtn, rangoSeleccionado === i && styles.rangoBtnActivo]}
-            onPress={() => setRangoSeleccionado(i)}
-          >
-            <Text style={[styles.rangoBtnTxt, rangoSeleccionado === i && styles.rangoBtnTxtActivo]}>
-              {r.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+
+      {/* Selector de fechas */}
+      <View style={styles.fechasContainer}>
+        <TouchableOpacity
+          style={styles.fechaBtn}
+          onPress={() => setMostrandoPicker('inicio')}
+        >
+          <Text style={styles.fechaBtnLabel}>Desde</Text>
+          <Text style={styles.fechaBtnValor}>{formatFechaCorta(fechaInicio)}</Text>
+        </TouchableOpacity>
+
+        <Text style={styles.fechaSeparador}>→</Text>
+
+        <TouchableOpacity
+          style={styles.fechaBtn}
+          onPress={() => setMostrandoPicker('fin')}
+        >
+          <Text style={styles.fechaBtnLabel}>Hasta</Text>
+          <Text style={styles.fechaBtnValor}>{formatFechaCorta(fechaFin)}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {mostrandoPicker && (
+        <DateTimePicker
+          value={mostrandoPicker === 'inicio' ? fechaInicio : fechaFin}
+          mode="date"
+          display="default"
+          maximumDate={new Date()}
+          onChange={onChangePicker}
+        />
+      )}
 
       {cargando ? (
         <View style={styles.centrado}>
           <ActivityIndicator size="large" color={colors.blue} />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.scroll}>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.blue} />
+          }
+        >
           <Text style={styles.titulo}>📋 Historial</Text>
 
           {/* Resumen */}
@@ -182,7 +228,7 @@ export default function Historial() {
                 <View style={styles.itemInfo}>
                   <Text style={styles.itemNombre}>{r.descripcion}</Text>
                   <Text style={styles.itemCat}>
-                    {r.categoria} · {RANGOS[rangoSeleccionado].dias > 1 ? formatFecha(r.hora) + ' ' : ''}{formatHora(r.hora)}
+                    {r.categoria} · {formatFechaRegistro(r.hora, mostrarFechaEnRegistro)}
                   </Text>
                 </View>
                 <Text style={styles.itemMonto}>{formatCOP(r.monto)}</Text>
@@ -198,37 +244,39 @@ export default function Historial() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   centrado: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  rangosScroll: {
+  fechasContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.card,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-    maxHeight: 52,
-  },
-  rangosContent: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
-    flexDirection: 'row',
-  },
-  rangoBtn: {
     paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  fechaBtn: {
+    flex: 1,
+    backgroundColor: colors.bg,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: 'transparent',
+    padding: 10,
   },
-  rangoBtnActivo: {
-    backgroundColor: colors.blue,
-    borderColor: colors.blue,
-  },
-  rangoBtnTxt: {
+  fechaBtnLabel: {
+    fontSize: 11,
     color: colors.textSecondary,
+    marginBottom: 2,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  fechaBtnValor: {
     fontSize: 13,
+    color: colors.textPrimary,
     fontWeight: '600',
   },
-  rangoBtnTxtActivo: {
-    color: '#fff',
+  fechaSeparador: {
+    color: colors.textSecondary,
+    fontSize: 16,
   },
   scroll: { padding: 16, paddingBottom: 32 },
   titulo: { fontSize: 24, fontWeight: 'bold', color: colors.textPrimary, marginBottom: 16 },

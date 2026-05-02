@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Modal
+  ActivityIndicator, Modal,RefreshControl 
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../../src/lib/supabase'
@@ -237,6 +237,13 @@ export default function Mesas() {
   const [cargando, setCargando] = useState(true)
   const [mesaSeleccionada, setMesaSeleccionada] = useState(null)
   const [modalVisible, setModalVisible] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+
+  async function onRefresh() {
+  setRefreshing(true)
+  await cargarMesas()
+  setRefreshing(false)
+}
 
   async function cargarMesas() {
     try {
@@ -298,7 +305,12 @@ export default function Mesas() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.blue} />
+        }
+      >       
         <Text style={styles.titulo}>🗺 Mapa de Mesas</Text>
         <Text style={styles.subtitulo}>
           {ocupadas} ocupada{ocupadas !== 1 ? 's' : ''} de {mesas.length} en total
