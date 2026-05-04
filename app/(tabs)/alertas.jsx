@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../../src/lib/supabase'
 import { colors } from '../../src/constants/colors'
 import { usePolling } from '../../src/hooks/usePolling'
+import { guardarCache, leerCacheSinExpiry } from '../../src/hooks/useCache'
 
 function formatFecha(fechaISO) {
   return new Date(fechaISO).toLocaleString('es-CO', {
@@ -43,10 +44,14 @@ export default function Alertas() {
         ...n,
         producto: productosMap[n.producto_id] || null
       }))
-  
+
+      await guardarCache('alertas', alertasConProducto)
       setAlertas(alertasConProducto)
     } catch (err) {
       console.error('Error cargando alertas:', err.message)
+      const cache = await leerCacheSinExpiry('alertas')
+      if (cache) setAlertas(cache)
+      else setAlertas([])
     } finally {
       setCargando(false)
       setRefreshing(false)

@@ -6,7 +6,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../../src/lib/supabase'
 import { colors } from '../../src/constants/colors'
-import { usePolling } from '../../src/hooks/usePolling'
+import { guardarCache, leerCacheSinExpiry } from '../../src/hooks/useCache'
 
 function formatCOP(valor) {
   return '$' + Number(valor || 0).toLocaleString('es-CO')
@@ -203,46 +203,64 @@ export default function Gastos() {
   }
 
   async function cargarDatos() {
+    setCargando(true)
+    const claveCache = `gastos_${anio}_${mes}`
+    
     try {
       const { inicio, fin } = obtenerRango()
       const inicioISO = inicio.toISOString()
       const finISO = fin.toISOString()
 
-      const { data: gastosData, error } = await supabase
+      const { data: gastosData } = await supabase
         .from('gastos')
         .select('*')
         .gte('fecha', inicioISO)
         .lte('fecha', finISO)
         .order('fecha', { ascending: false })
 
-      if (error) throw error
+      const datosFinales = gastosData || []
+      
+      await guardarCache(claveCache, datosFinales)
+      setGastos(datosFinales)
 
-      // Para el resumen usamos siempre el día de hoy
+    } catch (err) {
+      console.error('Error cargando gastos:', err)
+      const cache = await leerCacheSinExpiry(claveCache)
+      setGastos(cache || [])
+    }
+
+    // Cargar resumen (independiente)
+    try {
       const hoyInicio = new Date()
       hoyInicio.setHours(0, 0, 0, 0)
       const hoyFin = new Date()
       hoyFin.setHours(23, 59, 59, 999)
 
-      const { data: ventas } = await supabase
-        .from('ventas')
-        .select('precio_venta, cantidad, producto_id')
-        .gte('registrado_en', hoyInicio.toISOString())
-        .lte('registrado_en', hoyFin.toISOString())
-
-      const { data: turnos } = await supabase
-        .from('turnos_billar')
-        .select('costo_turno')
-        .gte('registrado_en', hoyInicio.toISOString())
-        .lte('registrado_en', hoyFin.toISOString())
-
-      const { data: gastosHoy } = await supabase
-        .from('gastos')
-        .select('monto')
-        .gte('fecha', hoyInicio.toISOString())
-        .lte('fecha', hoyFin.toISOString())
+      const [
+        { data: ventas },
+        { data: turnos },
+        { data: gastosHoy }
+      ] = await Promise.all([
+        supabase
+          .from('ventas')
+          .select('precio_venta, cantidad, producto_id')
+          .gte('registrado_en', hoyInicio.toISOString())
+          .lte('registrado_en', hoyFin.toISOString()),
+        supabase
+          .from('turnos_billar')
+          .select('costo_turno')
+          .gte('registrado_en', hoyInicio.toISOString())
+          .lte('registrado_en', hoyFin.toISOString()),
+        supabase
+          .from('gastos')
+          .select('monto')
+          .gte('fecha', hoyInicio.toISOString())
+          .lte('fecha', hoyFin.toISOString())
+      ])
 
       const productoIds = [...new Set((ventas || []).map(v => v.producto_id))]
       let productosMap = {}
+      
       if (productoIds.length > 0) {
         const { data: productos } = await supabase
           .from('productos')
@@ -260,7 +278,6 @@ export default function Gastos() {
         return s + costo * v.cantidad
       }, 0)
 
-      setGastos(gastosData || [])
       setResumen({
         ingresos,
         gananciaBruta: ingresos - costoVentas,
@@ -268,7 +285,7 @@ export default function Gastos() {
         totalGastos: totalGastosHoy,
       })
     } catch (err) {
-      console.error('Error cargando datos:', err.message)
+      console.error('Error cargando resumen:', err)
     } finally {
       setCargando(false)
       setRefreshing(false)
@@ -279,8 +296,6 @@ export default function Gastos() {
     setCargando(true)
     cargarDatos()
   }, [mes, anio])
-
-  usePolling(cargarDatos, 15000)
 
   const onRefresh = useCallback(() => {
     setRefreshing(true)

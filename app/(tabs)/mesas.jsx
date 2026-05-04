@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../../src/lib/supabase'
 import { colors } from '../../src/constants/colors'
 import { usePolling } from '../../src/hooks/usePolling'
+import { guardarCache, leerCacheSinExpiry } from '../../src/hooks/useCache'
 
 function tiempoTranscurrido(fechaISO) {
   if (!fechaISO) return ''
@@ -272,11 +273,14 @@ export default function Mesas() {
       }))
 
       setMesas(mesasConSesion)
-    } catch (err) {
-      console.error('Error cargando mesas:', err.message)
-    } finally {
-      setCargando(false)
-    }
+      await guardarCache('mesas', mesasConSesion)
+      } catch (err) {
+        console.error('Error cargando mesas:', err.message)
+        const cache = await leerCacheSinExpiry('mesas')
+        if (cache) setMesas(cache)
+      } finally {
+        setCargando(false)
+      }
   }
 
   useEffect(() => {

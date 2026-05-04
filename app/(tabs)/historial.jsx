@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { supabase } from '../../src/lib/supabase'
 import { colors } from '../../src/constants/colors'
-import { usePolling } from '../../src/hooks/usePolling'
+import { guardarCache, leerCacheSinExpiry } from '../../src/hooks/useCache'
 
 function formatCOP(valor) {
   return '$' + Number(valor || 0).toLocaleString('es-CO')
@@ -51,6 +51,8 @@ export default function Historial() {
   }
 
   async function cargarHistorial() {
+    const claveCache = `historial_${fechaInicio.toDateString()}_${fechaFin.toDateString()}`
+    
     try {
       const inicio = new Date(fechaInicio)
       inicio.setHours(0, 0, 0, 0)
@@ -101,10 +103,15 @@ export default function Historial() {
 
       const todos = [...ventasMapped, ...turnosMapped]
         .sort((a, b) => new Date(b.hora) - new Date(a.hora))
-
+      
+      // Guardar en cache y actualizar estado
+      await guardarCache(claveCache, todos)
       setRegistros(todos)
     } catch (err) {
       console.error('Error cargando historial:', err.message)
+      // Intentar cargar del cache como fallback
+      const cache = await leerCacheSinExpiry(claveCache)
+      if (cache) setRegistros(cache)
     } finally {
       setCargando(false)
     }
@@ -114,8 +121,6 @@ export default function Historial() {
     setCargando(true)
     cargarHistorial()
   }, [fechaInicio, fechaFin])
-
-  usePolling(cargarHistorial, 15000)
 
   function onChangePicker(event, selectedDate) {
     if (event.type === 'dismissed') {

@@ -6,7 +6,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../../src/lib/supabase'
 import { colors } from '../../src/constants/colors'
-import { usePolling } from '../../src/hooks/usePolling'
 
 function formatCOP(valor) {
   return '$' + Number(valor || 0).toLocaleString('es-CO')
@@ -20,18 +19,73 @@ const MESES = [
 export default function Reportes() {
   const insets = useSafeAreaInsets()
   const hoy = new Date()
+  const [dia, setDia] = useState(null)
   const [mes, setMes] = useState(hoy.getMonth())
   const [anio, setAnio] = useState(hoy.getFullYear())
   const [datos, setDatos] = useState(null)
   const [cargando, setCargando] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
+  function construirRangoFechas() {
+    // Si no hay ningún filtro, retorna null (se obtienen todos los datos)
+    if (dia === null && mes === null && anio === null) {
+      return null
+    }
+
+    // Valores por defecto si no están filtrados
+    const d = dia !== null ? dia : 1
+    const m = mes !== null ? mes : 0
+    const a = anio !== null ? anio : hoy.getFullYear()
+
+    let inicio, fin
+
+    // Casos según qué esté filtrado
+    if (dia !== null && mes !== null && anio !== null) {
+      // Día exacto
+      inicio = new Date(a, m, d, 0, 0, 0)
+      fin = new Date(a, m, d, 23, 59, 59, 999)
+    } else if (dia === null && mes !== null && anio !== null) {
+      // Mes exacto (sin día)
+      inicio = new Date(a, m, 1, 0, 0, 0)
+      fin = new Date(a, m + 1, 0, 23, 59, 59, 999)
+    } else if (dia !== null && mes === null && anio !== null) {
+      // Día y año (sin mes) - todos los días X del año
+      inicio = new Date(a, 0, d, 0, 0, 0)
+      fin = new Date(a, 11, 31, 23, 59, 59, 999)
+    } else if (dia !== null && mes !== null && anio === null) {
+      // Día y mes (sin año) - todos los años
+      inicio = new Date(2026, m, d, 0, 0, 0)
+      fin = new Date(2100, m, d, 23, 59, 59, 999)
+    } else if (dia === null && mes === null && anio !== null) {
+      // Año exacto (sin mes ni día)
+      inicio = new Date(a, 0, 1, 0, 0, 0)
+      fin = new Date(a, 11, 31, 23, 59, 59, 999)
+    } else if (dia === null && mes !== null && anio === null) {
+      // Mes (sin día ni año) - todos los meses X de todos los años
+      inicio = new Date(2026, m, 1, 0, 0, 0)
+      fin = new Date(2100, m + 1, 0, 23, 59, 59, 999)
+    } else if (dia !== null && mes === null && anio === null) {
+      // Día (sin mes ni año) - todos los días X de todos los meses
+      inicio = new Date(2026, 0, d, 0, 0, 0)
+      fin = new Date(2100, 11, 31, 23, 59, 59, 999)
+    }
+
+    return { inicio, fin }
+  }
+
   async function cargarReporte() {
     try {
-      const inicio = new Date(anio, mes, 1, 0, 0, 0)
-      const fin = new Date(anio, mes + 1, 0, 23, 59, 59, 999)
-      const inicioISO = inicio.toISOString()
-      const finISO = fin.toISOString()
+      const rango = construirRangoFechas()
+      let inicioISO, finISO
+
+      if (rango) {
+        inicioISO = rango.inicio.toISOString()
+        finISO = rango.fin.toISOString()
+      } else {
+        // Si no hay rango, obtener desde el año 2026 hasta hoy
+        inicioISO = new Date(2026, 0, 1).toISOString()
+        finISO = new Date().toISOString()
+      }
 
       const { data: ventas } = await supabase
         .from('ventas')
@@ -72,7 +126,6 @@ export default function Reportes() {
       const gananciaBruta = ingresos - costoVentas
       const gananciaNeta = ingresos - totalGastos
 
-      // Productos más vendidos
       const productosVendidos = {}
       ;(ventas || []).forEach(v => {
         const id = v.producto_id
@@ -90,7 +143,6 @@ export default function Reportes() {
         .sort((a, b) => b.cantidad - a.cantidad)
         .slice(0, 5)
 
-      // Gastos por categoría
       const gastosCat = {}
       ;(gastos || []).forEach(g => {
         const cat = g.categoria || 'Sin categoría'
@@ -98,7 +150,6 @@ export default function Reportes() {
         gastosCat[cat] += Number(g.monto)
       })
 
-      // Ingresos por día
       const ingresosDia = {}
       ;[...(ventas || []), ...(turnos || [])].forEach(r => {
         const fecha = new Date(r.registrado_en).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })
@@ -130,9 +181,7 @@ export default function Reportes() {
   useEffect(() => {
     setCargando(true)
     cargarReporte()
-  }, [mes, anio])
-
-  usePolling(cargarReporte, 30000)
+  }, [dia, mes, anio])
 
   const onRefresh = useCallback(() => {
     setRefreshing(true)
@@ -141,6 +190,27 @@ export default function Reportes() {
 
   const anios = []
   for (let a = hoy.getFullYear(); a >= 2026; a--) anios.push(a)
+
+  // Generar título dinámico según filtros
+  function generarTitulo() {
+    if (dia === null && mes === null && anio === null) {
+      return 'Todos los reportes'
+    } else if (dia !== null && mes !== null && anio !== null) {
+      return `${dia} ${MESES[mes]} ${anio}`
+    } else if (dia === null && mes !== null && anio !== null) {
+      return `${MESES[mes]} ${anio}`
+    } else if (dia !== null && mes === null && anio !== null) {
+      return `Día ${dia} de ${anio}`
+    } else if (dia !== null && mes !== null && anio === null) {
+      return `${dia} ${MESES[mes]} (todos los años)`
+    } else if (dia === null && mes === null && anio !== null) {
+      return `Año ${anio}`
+    } else if (dia === null && mes !== null && anio === null) {
+      return `${MESES[mes]} (todos los años)`
+    } else if (dia !== null && mes === null && anio === null) {
+      return `Día ${dia} (todos los meses y años)`
+    }
+  }
 
   if (cargando) {
     return (
@@ -152,12 +222,46 @@ export default function Reportes() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Selector mes/año */}
+      {/* Selector día/mes/año */}
       <View style={styles.selectorContainer}>
+        <View style={styles.selectorGrupo}>
+          <Text style={styles.selectorLabel}>Día</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={styles.selectorRow}>
+              <TouchableOpacity
+                style={[styles.selectorBtn, dia === null && styles.selectorBtnActivo]}
+                onPress={() => setDia(null)}
+              >
+                <Text style={[styles.selectorBtnTxt, dia === null && styles.selectorBtnTxtActivo]}>
+                  Todos
+                </Text>
+              </TouchableOpacity>
+              {[...Array(31)].map((_, i) => (
+                <TouchableOpacity
+                  key={i + 1}
+                  style={[styles.selectorBtn, dia === i + 1 && styles.selectorBtnActivo]}
+                  onPress={() => setDia(i + 1)}
+                >
+                  <Text style={[styles.selectorBtnTxt, dia === i + 1 && styles.selectorBtnTxtActivo]}>
+                    {i + 1}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
+        </View>
         <View style={styles.selectorGrupo}>
           <Text style={styles.selectorLabel}>Mes</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={styles.selectorRow}>
+              <TouchableOpacity
+                style={[styles.selectorBtn, mes === null && styles.selectorBtnActivo]}
+                onPress={() => setMes(null)}
+              >
+                <Text style={[styles.selectorBtnTxt, mes === null && styles.selectorBtnTxtActivo]}>
+                  Todos
+                </Text>
+              </TouchableOpacity>
               {MESES.map((m, i) => (
                 <TouchableOpacity
                   key={i}
@@ -175,6 +279,14 @@ export default function Reportes() {
         <View style={styles.selectorGrupo}>
           <Text style={styles.selectorLabel}>Año</Text>
           <View style={styles.selectorRow}>
+            <TouchableOpacity
+              style={[styles.selectorBtn, anio === null && styles.selectorBtnActivo]}
+              onPress={() => setAnio(null)}
+            >
+              <Text style={[styles.selectorBtnTxt, anio === null && styles.selectorBtnTxtActivo]}>
+                Todos
+              </Text>
+            </TouchableOpacity>
             {anios.map(a => (
               <TouchableOpacity
                 key={a}
@@ -196,7 +308,7 @@ export default function Reportes() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.blue} />
         }
       >
-        <Text style={styles.titulo}>📈 Reporte — {MESES[mes]} {anio}</Text>
+        <Text style={styles.titulo}>📈 Reporte — {generarTitulo()}</Text>
 
         {datos && (
           <>
