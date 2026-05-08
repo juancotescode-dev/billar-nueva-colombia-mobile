@@ -230,7 +230,7 @@ export default function Reservas() {
   const [cargando, setCargando] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
-  const [filtro, setFiltro] = useState('pendiente')
+  const [filtro, setFiltro] = useState('todas')
 
   async function cargarMesas() {
     const { data } = await supabase.from('mesas').select('*').eq('activo', true).order('tipo').order('numero')

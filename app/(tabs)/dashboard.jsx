@@ -283,6 +283,14 @@ export default function Dashboard() {
     )
   }
 
+  if (!datos) {
+    return (
+      <View style={styles.centrado}>
+        <Text style={styles.errorTxt}>Error cargando datos</Text>
+      </View>
+    )
+  }
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <ScrollView

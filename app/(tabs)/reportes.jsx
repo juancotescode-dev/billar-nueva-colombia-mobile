@@ -6,6 +6,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../../src/lib/supabase'
 import { colors } from '../../src/constants/colors'
+import { guardarCache, leerCacheSinExpiry } from '../../src/hooks/useCache'
 
 function formatCOP(valor) {
   return '$' + Number(valor || 0).toLocaleString('es-CO')
@@ -170,8 +171,26 @@ export default function Reportes() {
         gastosCat,
         ingresosDia,
       })
+
+      // Guardar en cache para uso offline
+      await guardarCache('reportes', {
+        ingresos,
+        totalVentas,
+        totalTurnos,
+        totalGastos,
+        gananciaBruta,
+        gananciaNeta,
+        numVentas: (ventas || []).length,
+        numTurnos: (turnos || []).length,
+        topProductos,
+        gastosCat,
+        ingresosDia,
+      })
     } catch (err) {
       console.error('Error cargando reporte:', err.message)
+      // Intentar cargar del cache como fallback
+      const cache = await leerCacheSinExpiry('reportes')
+      if (cache) setDatos(cache)
     } finally {
       setCargando(false)
       setRefreshing(false)
