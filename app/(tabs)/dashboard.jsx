@@ -11,6 +11,7 @@ import { guardarCache, leerCacheSinExpiry } from '../../src/hooks/useCache'
 import { Modal, TextInput, Alert, TouchableOpacity } from 'react-native'
 import * as bcrypt from 'bcryptjs'
 import { getRandomBytes } from 'expo-crypto'
+import { useRouter } from 'expo-router'
 
 // Fallback for crypto in React Native
 bcrypt.setRandomFallback((len) => {
@@ -191,6 +192,7 @@ export default function Dashboard() {
   const [cargando, setCargando] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [modalPinVisible, setModalPinVisible] = useState(false)
+  const router = useRouter()
 
   async function cargarDatos() {
     try {
@@ -337,6 +339,20 @@ export default function Dashboard() {
         )}
 
         <TouchableOpacity
+          style={styles.btnAsistente}
+          onPress={() => router.push('/(tabs)/asistente')}
+        >
+          <View style={styles.btnAsistenteInner}>
+            <Text style={styles.btnAsistenteEmoji}>🤖</Text>
+            <View style={styles.btnAsistenteTextos}>
+              <Text style={styles.btnAsistenteTitulo}>Asistente IA</Text>
+              <Text style={styles.btnAsistenteSub}>Análisis inteligente del negocio</Text>
+            </View>
+            <Text style={styles.btnAsistenteFlecha}>›</Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
           style={styles.btnCambiarPin}
           onPress={() => setModalPinVisible(true)}
         >
@@ -442,4 +458,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  btnAsistente: {
+  marginTop: 16,
+  backgroundColor: '#1e1b4b',
+  borderRadius: 12,
+  borderWidth: 1,
+  borderColor: '#4f46e5',
+  overflow: 'hidden',
+},
+btnAsistenteInner: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  padding: 16,
+  gap: 12,
+},
+btnAsistenteEmoji: { fontSize: 28 },
+btnAsistenteTextos: { flex: 1 },
+btnAsistenteTitulo: { color: colors.textPrimary, fontSize: 15, fontWeight: '700' },
+btnAsistenteSub: { color: '#a5b4fc', fontSize: 12, marginTop: 2 },
+btnAsistenteFlecha: { color: '#4f46e5', fontSize: 24, fontWeight: 'bold' },
 })

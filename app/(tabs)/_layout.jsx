@@ -51,6 +51,9 @@ export default function TabsLayout() {
         title: 'Reservas',
         tabBarIcon: ({ color, size }) => <Ionicons name="calendar" size={size} color={color} />
       }} />
+      <Tabs.Screen name="asistente" options={{
+        href: null,
+      }} />
     </Tabs>
   )
 }
