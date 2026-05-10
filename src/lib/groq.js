@@ -188,6 +188,11 @@ async function consultarResumenDia({ fecha }) {
   const totalGastos = gastos.reduce((s, g) => s + Number(g.monto), 0)
   const costoVentas = ventas.reduce((s, v) => s + (productosMap[v.producto_id]?.costo_compra || 0) * v.cantidad, 0)
   const totalIngresos = totalVentas + totalTurnos
+  // Al calcular ganancia bruta en móvil, verificar que costo_compra no sea null
+  const gananciaBruta = ventasData.reduce((acc, v) => {
+    const costoCompra = v.productos?.costo_compra || 0
+    return acc + (v.precio_venta - costoCompra) * v.cantidad
+  }, 0)
 
   return {
     fecha: dia,
