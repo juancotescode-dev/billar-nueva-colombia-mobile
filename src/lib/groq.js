@@ -1,8 +1,15 @@
 import { supabase } from './supabase'
+import Constants from 'expo-constants'; // 1. Importamos Constants
 
-const GROQ_API_KEY = process.env.EXPO_PUBLIC_GROQ_API_KEY
+// 2. Extraemos la key desde el objeto 'extra' que definimos en app.config.js
+const GROQ_API_KEY = Constants.expoConfig?.extra?.groqApiKey; 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 const MODEL = 'llama-3.1-8b-instant'
+
+// Un pequeño check de seguridad para que no te rompa la app si falta la key
+if (!GROQ_API_KEY) {
+  console.warn("CUIDADO: La API Key de GROQ no está definida en Constants.extra");
+}
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
