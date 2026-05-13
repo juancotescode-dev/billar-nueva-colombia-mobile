@@ -44,9 +44,13 @@ export default function Asistente() {
   const [cargando, setCargando] = useState(false)
   const scrollRef = useRef(null)
 
-  useEffect(() => {
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100)
-  }, [mensajes, cargando])
+// ── FIX: cleanup del setTimeout para evitar memory leak ──
+useEffect(() => {
+  const timer = setTimeout(() => {
+    scrollRef.current?.scrollToEnd({ animated: true })
+  }, 100)
+  return () => clearTimeout(timer)
+}, [mensajes, cargando])
 
   async function enviar(texto) {
     const pregunta = texto || input.trim()

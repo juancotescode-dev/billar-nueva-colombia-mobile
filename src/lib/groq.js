@@ -539,30 +539,33 @@ export async function preguntarAGroq(historialChat, preguntaUsuario) {
       return mensaje.content
     }
 
-    for (const toolCall of mensaje.tool_calls) {
-      const nombreFuncion = toolCall.function.name
-      let args
-      try {
-        args = JSON.parse(toolCall.function.arguments)
-      } catch {
-        args = {}
-      }
+    // ── FIX: tool calls en paralelo con Promise.all ──
+    await Promise.all(
+      mensaje.tool_calls.map(async (toolCall) => {
+        const nombreFuncion = toolCall.function.name
+        let args
+        try {
+          args = JSON.parse(toolCall.function.arguments)
+        } catch {
+          args = {}
+        }
 
-      let resultado
-      try {
-        const funcion = funcionesDisponibles[nombreFuncion]
-        if (!funcion) throw new Error(`Función ${nombreFuncion} no existe`)
-        resultado = await funcion(args)
-      } catch (err) {
-        resultado = { error: err.message }
-      }
+        let resultado
+        try {
+          const funcion = funcionesDisponibles[nombreFuncion]
+          if (!funcion) throw new Error(`Función ${nombreFuncion} no existe`)
+          resultado = await funcion(args)
+        } catch (err) {
+          resultado = { error: err.message }
+        }
 
-      mensajes.push({
-        role: 'tool',
-        tool_call_id: toolCall.id,
-        content: JSON.stringify(resultado)
+        mensajes.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: JSON.stringify(resultado)
+        })
       })
-    }
+    )
   }
 
   return 'No pude completar la consulta. Intenta reformular la pregunta.'

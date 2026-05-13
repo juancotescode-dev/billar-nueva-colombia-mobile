@@ -1,17 +1,22 @@
 import { useState } from 'react'
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ActivityIndicator, Alert, SafeAreaView
+  ActivityIndicator, Alert
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useRouter } from 'expo-router'
 import * as bcrypt from 'bcryptjs'
+import { getRandomBytes } from 'expo-crypto'
 import { supabase } from '../src/lib/supabase'
 import { colors } from '../src/constants/colors'
+
+bcrypt.setRandomFallback((len) => Array.from(getRandomBytes(len)))
 
 const MAX_INTENTOS = 3
 
 export default function Login() {
+  const insets = useSafeAreaInsets()
   const router = useRouter()
   const [pin, setPin] = useState('')
   const [cargando, setCargando] = useState(false)
@@ -21,7 +26,6 @@ export default function Login() {
     if (intentos >= MAX_INTENTOS) return
     try {
       setCargando(true)
-
       const { data, error } = await supabase
         .from('configuracion')
         .select('valor')
@@ -30,11 +34,11 @@ export default function Login() {
 
       if (error || !data) throw new Error('No se pudo obtener la configuración')
 
-      const valido = await bcrypt.compare(String(pinIngresado), data.valor)
+      const valido = bcrypt.compareSync(String(pinIngresado), data.valor)
 
-        if (valido) {
-          router.replace('/(tabs)/dashboard')
-        } else {
+      if (valido) {
+        router.replace('/(tabs)/dashboard')
+      } else {
         const nuevosIntentos = intentos + 1
         setIntentos(nuevosIntentos)
         setPin('')
@@ -65,10 +69,12 @@ export default function Login() {
     }
   }
 
+  // ── FIX: key usa la tecla misma + índice para evitar duplicados ──
   const teclas = ['1','2','3','4','5','6','7','8','9','','0','DEL']
 
   return (
-    <SafeAreaView style={styles.container}>
+    // ── FIX: View con paddingTop en vez de SafeAreaView de react-native ──
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.inner}>
         <Text style={styles.titulo}>🎱 Billares</Text>
         <Text style={styles.subtitulo}>Nueva Colombia</Text>
@@ -88,8 +94,9 @@ export default function Login() {
         ) : (
           <View style={styles.teclado}>
             {teclas.map((tecla, i) => (
+              // ── FIX: key combina tecla + índice para evitar duplicados ──
               <TouchableOpacity
-                key={i}
+                key={`tecla-${tecla}-${i}`}
                 style={[styles.tecla, tecla === '' && styles.teclaVacia]}
                 onPress={() => tecla !== '' && presionarTecla(tecla)}
                 disabled={tecla === ''}
@@ -100,7 +107,7 @@ export default function Login() {
           </View>
         )}
       </View>
-    </SafeAreaView>
+    </View>
   )
 }
 
