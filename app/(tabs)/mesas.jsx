@@ -284,6 +284,7 @@ export default function Mesas() {
   }
 
   useEffect(() => {
+    setCargando(true)
     cargarMesas()
   }, [])
 

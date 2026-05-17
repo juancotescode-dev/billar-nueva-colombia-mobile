@@ -1,15 +1,8 @@
 import { supabase } from './supabase'
-import Constants from 'expo-constants'; // 1. Importamos Constants
 
-// 2. Extraemos la key desde el objeto 'extra' que definimos en app.config.js
-const GROQ_API_KEY = Constants.expoConfig?.extra?.groqApiKey; 
+const GROQ_API_KEY = process.env.EXPO_PUBLIC_GROQ_API_KEY
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 const MODEL = 'llama-3.1-8b-instant'
-
-// Un pequeño check de seguridad para que no te rompa la app si falta la key
-if (!GROQ_API_KEY) {
-  console.warn("CUIDADO: La API Key de GROQ no está definida en Constants.extra");
-}
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
@@ -195,11 +188,6 @@ async function consultarResumenDia({ fecha }) {
   const totalGastos = gastos.reduce((s, g) => s + Number(g.monto), 0)
   const costoVentas = ventas.reduce((s, v) => s + (productosMap[v.producto_id]?.costo_compra || 0) * v.cantidad, 0)
   const totalIngresos = totalVentas + totalTurnos
-  // Al calcular ganancia bruta en móvil, verificar que costo_compra no sea null
-  const gananciaBruta = ventasData.reduce((acc, v) => {
-    const costoCompra = v.productos?.costo_compra || 0
-    return acc + (v.precio_venta - costoCompra) * v.cantidad
-  }, 0)
 
   return {
     fecha: dia,
@@ -214,7 +202,6 @@ async function consultarResumenDia({ fecha }) {
   }
 }
 
-// ── FIX PRINCIPAL: sin filtro inventario_activo, solo activo=true ──
 async function consultarStockProductos({ soloStockBajo = false }) {
   const { data, error } = await supabase
     .from('productos')
@@ -321,7 +308,7 @@ const funcionesDisponibles = {
   consultarMesasMasUsadas,
   consultarResumenDia,
   consultarStockProductos,
-  consultarCatalogoProductos, // ← nueva
+  consultarCatalogoProductos,
   consultarResumenMes,
 }
 
@@ -461,7 +448,7 @@ const herramientas = [
   },
 ]
 
-// ─── SISTEMA PROMPT COMPACTO ─────────────────────────────────────────────────
+// ─── SISTEMA PROMPT ───────────────────────────────────────────────────────────
 
 function obtenerSistemaPrompt() {
   const hoy = new Date()
@@ -473,7 +460,6 @@ function obtenerSistemaPrompt() {
   const mesActual = hoy.getMonth() + 1
   const anioActual = hoy.getFullYear()
 
-  // Calcular inicio de semana (lunes)
   const lunes = new Date(hoy)
   lunes.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7))
   const lunesISO = lunes.toISOString().split('T')[0]
@@ -546,7 +532,6 @@ export async function preguntarAGroq(historialChat, preguntaUsuario) {
       return mensaje.content
     }
 
-    // ── FIX: tool calls en paralelo con Promise.all ──
     await Promise.all(
       mensaje.tool_calls.map(async (toolCall) => {
         const nombreFuncion = toolCall.function.name

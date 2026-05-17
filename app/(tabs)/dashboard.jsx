@@ -263,6 +263,7 @@ export default function Dashboard() {
   }
 
   useEffect(() => {
+    setCargando(true)
     cargarDatos()
   }, [])
 

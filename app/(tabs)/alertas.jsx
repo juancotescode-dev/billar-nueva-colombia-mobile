@@ -59,6 +59,7 @@ export default function Alertas() {
   }
 
   useEffect(() => {
+    setCargando(true)
     cargarAlertas()
   }, [])
 

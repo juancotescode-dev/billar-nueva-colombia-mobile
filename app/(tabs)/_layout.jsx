@@ -31,6 +31,10 @@ export default function TabsLayout() {
         title: 'Mesas',
         tabBarIcon: ({ color, size }) => <Ionicons name="grid" size={size} color={color} />
       }} />
+      <Tabs.Screen name="inventario" options={{
+        title: 'Inventario',
+        tabBarIcon: ({ color, size }) => <Ionicons name="cube" size={size} color={color} />
+      }} />
       <Tabs.Screen name="historial" options={{
         title: 'Historial',
         tabBarIcon: ({ color, size }) => <Ionicons name="list" size={size} color={color} />
